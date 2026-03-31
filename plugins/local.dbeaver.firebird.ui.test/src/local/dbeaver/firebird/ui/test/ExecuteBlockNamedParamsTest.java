@@ -15,21 +15,22 @@ import local.dbeaver.ui.test.support.ScreenshotUtil;
 import local.dbeaver.ui.test.support.WorkbenchUtil;
 
 /**
- * L1.4: EXECUTE BLOCK Parameter Binding Test
+ * EXECUTE BLOCK with Named Parameters Test
  *
- * Verifies that DBeaver correctly handles parameter binding for Firebird's
- * EXECUTE BLOCK statements.
+ * Verifies that DBeaver correctly handles NAMED parameter binding (:x, :y)
+ * for Firebird's EXECUTE BLOCK statements, as opposed to positional (?) params.
  *
  * Expected behavior:
- * - FAIL on 'devel' branch (text substitution breaks Firebird DSQL parser)
- * - PASS on 'fix/firebird-execute-block-params' branch (native binding)
+ * - FAIL on 'devel' branch (named params not handled by native binding)
+ * - PASS on 'fix/firebird-execute-block-params' branch (named binding support)
  */
-public class ExecuteBlockParameterBindingTest {
+public class ExecuteBlockNamedParamsTest {
 
     private static SWTWorkbenchBot bot;
 
-    private static final String EXECUTE_BLOCK_SQL =
-            "EXECUTE BLOCK (x DOUBLE PRECISION = ?, y DOUBLE PRECISION = ?)\n" +
+    /** Uses :x and :y named parameters instead of positional ? */
+    private static final String EXECUTE_BLOCK_NAMED_SQL =
+            "EXECUTE BLOCK (x DOUBLE PRECISION = :x, y DOUBLE PRECISION = :y)\n" +
             "RETURNS (gmean DOUBLE PRECISION)\n" +
             "AS\n" +
             "BEGIN\n" +
@@ -51,37 +52,37 @@ public class ExecuteBlockParameterBindingTest {
     }
 
     @Test
-    public void testExecuteBlockWithParameters() {
+    public void testExecuteBlockWithNamedParameters() {
         try {
             SWTBotEditor editor = SQLEditorUtil.openSQLConsole(bot,
                     FirebirdTestContext.getConnectionName());
             assertNotNull("SQL editor should open", editor);
 
-            SQLEditorUtil.typeSQL(bot, EXECUTE_BLOCK_SQL);
+            SQLEditorUtil.typeSQL(bot, EXECUTE_BLOCK_NAMED_SQL);
             SQLEditorUtil.executeStatement(bot);
 
-            // Wait for parameter dialog with a proper timeout
-            // (the SQL job starts asynchronously, so a fixed sleep is unreliable)
+            // Wait for parameter dialog
             bot.waitUntil(Conditions.shellIsActive(SQLEditorUtil.PARAM_DIALOG_TITLE), 15000);
             assertTrue("Parameter binding dialog should appear",
                     SQLEditorUtil.isParameterDialogOpen(bot));
 
-            // Fill parameter values: x=3, y=4 → gmean ≈ 3.4641
-            SQLEditorUtil.fillParameterDialog(bot, "3", "4");
+            // Fill parameter values: x=9, y=16 → gmean = SQRT(144) = 12.0
+            SQLEditorUtil.fillParameterDialog(bot, "9", "16");
 
             SQLEditorUtil.waitForExecution(bot);
 
-            // On 'devel' branch this FAILS because Firebird's DSQL parser rejects text-substituted query.
-            // On 'fix/firebird-execute-block-params' branch, native binding succeeds.
+            // On 'devel' branch this FAILS because named params are not replaced
+            // with positional ? placeholders before JDBC execution.
+            // On 'fix/firebird-execute-block-params' branch, named binding succeeds.
             String error = SQLEditorUtil.checkForErrorDialog(bot);
-            assertNull("EXECUTE BLOCK should execute without errors " +
+            assertNull("EXECUTE BLOCK with named params should execute without errors " +
                     "(fails on 'devel', passes on 'fix/firebird-execute-block-params'). " +
                     "Error: " + error, error);
 
             editor.close();
         } catch (Exception e) {
-            ScreenshotUtil.captureOnFailure("ExecuteBlockParameterBindingTest",
-                    "testExecuteBlockWithParameters");
+            ScreenshotUtil.captureOnFailure("ExecuteBlockNamedParamsTest",
+                    "testExecuteBlockWithNamedParameters");
             throw e;
         }
     }
@@ -90,9 +91,5 @@ public class ExecuteBlockParameterBindingTest {
     public static void tearDown() {
         SQLEditorUtil.dismissErrorDialogs(bot);
         WorkbenchUtil.closeAllEditors(bot);
-    }
-
-    private static void sleep(long ms) {
-        try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
     }
 }

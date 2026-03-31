@@ -1,13 +1,13 @@
 package local.dbeaver.ui.test.support;
 
 import org.eclipse.swtbot.eclipse.finder.SWTWorkbenchBot;
+import org.eclipse.swtbot.eclipse.finder.widgets.SWTBotEclipseEditor;
 import org.eclipse.swtbot.eclipse.finder.widgets.SWTBotEditor;
 import org.eclipse.swtbot.swt.finder.SWTBot;
 import org.eclipse.swtbot.swt.finder.exceptions.WidgetNotFoundException;
 import org.eclipse.swtbot.swt.finder.waits.Conditions;
 import org.eclipse.swtbot.swt.finder.waits.DefaultCondition;
 import org.eclipse.swtbot.swt.finder.widgets.SWTBotShell;
-import org.eclipse.swtbot.swt.finder.widgets.SWTBotStyledText;
 import org.eclipse.swtbot.swt.finder.widgets.SWTBotTable;
 import org.eclipse.swtbot.swt.finder.widgets.SWTBotTree;
 import org.eclipse.swtbot.swt.finder.widgets.SWTBotTreeItem;
@@ -37,7 +37,7 @@ public class SQLEditorUtil {
             @Override
             public boolean test() throws Exception {
                 try {
-                    return wbot.activeEditor() != null;
+                    return wbot.activeEditor() != null && getActiveTextEditor(wbot) != null;
                 } catch (WidgetNotFoundException e) {
                     return false;
                 }
@@ -55,19 +55,23 @@ public class SQLEditorUtil {
      * Types SQL into the active SQL editor, replacing any existing content.
      */
     public static void typeSQL(SWTWorkbenchBot bot, String sql) {
-        bot.styledText().setText(sql);
+        SWTBotEclipseEditor editor = getActiveTextEditor(bot);
+        editor.setFocus();
+        editor.setText(sql);
     }
 
     /** Executes the current SQL statement using Ctrl+Enter. */
     public static void executeStatement(SWTWorkbenchBot bot) {
-        bot.styledText().setFocus();
-        bot.styledText().pressShortcut(SWT.CTRL, SWT.CR);
+        SWTBotEclipseEditor editor = getActiveTextEditor(bot);
+        editor.setFocus();
+        editor.pressShortcut(SWT.CTRL, SWT.CR);
     }
 
     /** Executes the entire SQL script using Alt+X. */
     public static void executeScript(SWTWorkbenchBot bot) {
-        bot.styledText().setFocus();
-        bot.styledText().pressShortcut(SWT.ALT, 'x');
+        SWTBotEclipseEditor editor = getActiveTextEditor(bot);
+        editor.setFocus();
+        editor.pressShortcut(SWT.ALT, 'x');
     }
 
     /**
@@ -158,5 +162,35 @@ public class SQLEditorUtil {
 
     private static void sleep(long ms) {
         try { Thread.sleep(ms); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
+
+    private static SWTBotEclipseEditor getActiveTextEditor(SWTWorkbenchBot bot) {
+        final SWTWorkbenchBot workbenchBot = bot;
+        bot.waitUntil(new DefaultCondition() {
+            @Override
+            public boolean test() {
+                try {
+                    SWTBotEditor activeEditor = workbenchBot.activeEditor();
+                    if (activeEditor == null) {
+                        return false;
+                    }
+                    activeEditor.show();
+                    activeEditor.setFocus();
+                    return activeEditor.toTextEditor().getStyledText() != null;
+                } catch (Exception e) {
+                    return false;
+                }
+            }
+
+            @Override
+            public String getFailureMessage() {
+                return "Active SQL text editor did not become ready in time";
+            }
+        }, 15000, 300);
+
+        SWTBotEditor activeEditor = workbenchBot.activeEditor();
+        activeEditor.show();
+        activeEditor.setFocus();
+        return activeEditor.toTextEditor();
     }
 }

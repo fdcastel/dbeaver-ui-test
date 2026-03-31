@@ -15,6 +15,7 @@ import org.junit.runners.Suite.SuiteClasses;
     EditConnectionRoundTripTest.class,
     SQLEditorSetTermTest.class,
     ExecuteBlockParameterBindingTest.class,
+    ExecuteBlockNamedParamsTest.class,
     NavigatorSmokeTest.class
 })
 public class AllFirebirdUITests {
