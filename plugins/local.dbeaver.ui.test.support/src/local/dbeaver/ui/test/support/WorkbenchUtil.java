@@ -8,6 +8,7 @@ import org.eclipse.swtbot.swt.finder.widgets.SWTBotShell;
 import org.eclipse.swt.widgets.Display;
 import org.eclipse.ui.IWorkbench;
 import org.eclipse.ui.IWorkbenchWindow;
+import org.eclipse.ui.IViewReference;
 import org.eclipse.ui.PlatformUI;
 
 /**
@@ -72,9 +73,8 @@ public class WorkbenchUtil {
     }
 
     /**
-     * Waits for the DBeaver workbench window to be visible and ready.
-     * DBeaver starts in a few seconds on modern hardware — we poll every 200ms
-     * and give up after 30 seconds.
+     * Waits for the DBeaver workbench window to be visible and the active
+     * project to be loaded.  Polls every 200 ms (no fixed sleep).
      */
     public static void waitForWorkbench(SWTWorkbenchBot bot) {
         bot.waitUntil(new DefaultCondition() {
@@ -88,7 +88,13 @@ public class WorkbenchUtil {
                         if (window != null && window.getShell() != null
                                 && !window.getShell().isDisposed()
                                 && window.getShell().isVisible()) {
-                            ready[0] = true;
+                            // Stronger readiness signal: DBeaver platform + active project loaded
+                            var platform = org.jkiss.dbeaver.runtime.DBWorkbench.getPlatform();
+                            if (platform != null
+                                    && platform.getWorkspace() != null
+                                    && platform.getWorkspace().getActiveProject() != null) {
+                                ready[0] = true;
+                            }
                         }
                     } catch (Exception e) {
                         // not ready yet
@@ -99,38 +105,47 @@ public class WorkbenchUtil {
 
             @Override
             public String getFailureMessage() {
-                return "DBeaver workbench did not start within 30 seconds";
+                return "DBeaver workbench did not become ready within 30 seconds";
             }
         }, 30000, 200);
-
-        // Brief settle time for the window to finish layout
-        sleep(300);
     }
 
     /**
      * Dismisses any startup dialogs that may appear.
      * With a properly pre-seeded workspace, this should be a no-op.
+     * Uses the workbench API directly to check for the Welcome view
+     * (avoids SWTBot's viewByTitle which polls for TIMEOUT seconds).
      */
     public static void dismissInitialDialogs(SWTWorkbenchBot bot) {
-        for (int attempt = 0; attempt < 3; attempt++) {
-            boolean dismissed = false;
-            try { bot.viewByTitle("Welcome").close(); dismissed = true; }
-            catch (WidgetNotFoundException e) { /* no welcome */ }
-
-            for (SWTBotShell shell : bot.shells()) {
-                String title = shell.getText().toLowerCase();
-                if (title.contains("tip of the day") || title.contains("license")
-                        || title.contains("error") || title.contains("warning")
-                        || title.contains("welcome") || title.contains("can't connect")) {
-                    try {
-                        try { shell.bot().button("OK").click(); }
-                        catch (WidgetNotFoundException e) { shell.close(); }
-                        dismissed = true;
-                    } catch (Exception e) { /* ignore */ }
+        // Close the Welcome/Intro view via workbench API (instant, no timeout)
+        Display.getDefault().syncExec(() -> {
+            try {
+                IWorkbench wb = PlatformUI.getWorkbench();
+                IWorkbenchWindow window = wb.getActiveWorkbenchWindow();
+                if (window != null && window.getActivePage() != null) {
+                    for (IViewReference ref : window.getActivePage().getViewReferences()) {
+                        String id = ref.getId();
+                        if (id.contains("intro") || id.contains("welcome")) {
+                            window.getActivePage().hideView(ref);
+                        }
+                    }
                 }
+            } catch (Exception e) {
+                // ignore
             }
-            if (!dismissed) break;
-            sleep(200);
+        });
+
+        // Quick sweep for unexpected dialogs (use short timeout)
+        for (SWTBotShell shell : bot.shells()) {
+            String title = shell.getText().toLowerCase();
+            if (title.contains("tip of the day") || title.contains("license")
+                    || title.contains("error") || title.contains("warning")
+                    || title.contains("welcome") || title.contains("can't connect")) {
+                try {
+                    try { shell.bot().button("OK").click(); }
+                    catch (WidgetNotFoundException e) { shell.close(); }
+                } catch (Exception e) { /* ignore */ }
+            }
         }
     }
 
