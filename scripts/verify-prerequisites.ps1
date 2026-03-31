@@ -45,7 +45,7 @@ if (Test-Path $PropertiesFile) {
 
     # DBeaver P2 repo (local build)
     $p2Repo = $props['DBEAVER_P2_REPO']
-    Check "DBeaver local P2 repo exists at $p2Repo" (Test-Path "$p2Repo\content.jar" -or (Test-Path "$p2Repo\content.xml.xz"))
+    Check "DBeaver local P2 repo exists at $p2Repo" ((Test-Path "$p2Repo\content.jar") -or (Test-Path "$p2Repo\content.xml.xz"))
 
     # Firebird isql
     $isql = $props['FIREBIRD_ISQL']

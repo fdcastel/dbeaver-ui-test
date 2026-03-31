@@ -10,7 +10,7 @@
     Skip the prerequisite verification step.
 .PARAMETER TestFilter
     Run only tests matching this pattern (passed as -Dtest=...).
-.PARAMETER Verbose
+.PARAMETER MavenVerbose
     Enable verbose Maven output.
 #>
 [CmdletBinding()]
@@ -18,7 +18,7 @@ param(
     [switch]$SkipDbReset,
     [switch]$SkipPrereqCheck,
     [string]$TestFilter,
-    [switch]$Verbose
+    [switch]$MavenVerbose
 )
 
 $ErrorActionPreference = "Stop"
@@ -50,7 +50,7 @@ if (-not $artifactsDir) { $artifactsDir = Join-Path $scriptDir "artifacts" }
 # --- Verify prerequisites ---
 if (-not $SkipPrereqCheck) {
     Write-Host "--- Verifying prerequisites ---" -ForegroundColor Yellow
-    & "$scriptDir\scripts\verify-prerequisites.ps1" -PropertiesFile $propsFile
+    & "$scriptDir\scripts\verify-prerequisites.ps1" -PropertiesFile "$propsFile"
     if ($LASTEXITCODE -ne 0) { exit 1 }
     Write-Host ""
 }
@@ -58,7 +58,7 @@ if (-not $SkipPrereqCheck) {
 # --- Reset Firebird database ---
 if (-not $SkipDbReset) {
     Write-Host "--- Resetting Firebird test database ---" -ForegroundColor Yellow
-    & "$scriptDir\scripts\reset-firebird-db.ps1" -PropertiesFile $propsFile
+    & "$scriptDir\scripts\reset-firebird-db.ps1" -PropertiesFile "$propsFile"
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Database reset failed."
         exit 1
@@ -95,7 +95,7 @@ if ($TestFilter) {
     $mvnArgs += "-Dtest=$TestFilter"
 }
 
-if ($Verbose) {
+if ($MavenVerbose) {
     $mvnArgs += "-X"
 }
 
