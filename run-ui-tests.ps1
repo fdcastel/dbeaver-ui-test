@@ -1,3 +1,5 @@
+#requires -Version 7
+
 <#
 .SYNOPSIS
     Single-command entry point for the DBeaver UI test suite.
