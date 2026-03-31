@@ -1,0 +1,23 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: DBeaver UI Test Support
+Bundle-SymbolicName: local.dbeaver.ui.test.support
+Bundle-Version: 1.0.0.qualifier
+Bundle-RequiredExecutionEnvironment: JavaSE-21
+Require-Bundle: org.eclipse.swtbot.swt.finder,
+ org.eclipse.swtbot.eclipse.finder,
+ org.eclipse.swt,
+ org.eclipse.jface,
+ org.eclipse.ui.workbench,
+ org.eclipse.core.runtime,
+ org.jkiss.dbeaver.ui,
+ org.jkiss.dbeaver.ui.navigator,
+ org.jkiss.dbeaver.ui.editors.sql,
+ org.jkiss.dbeaver.ui.editors.base,
+ org.jkiss.dbeaver.model,
+ org.jkiss.dbeaver.model.sql,
+ org.jkiss.dbeaver.registry,
+ org.jkiss.dbeaver.core
+Export-Package: local.dbeaver.ui.test.support
+Bundle-Vendor: Local
+Automatic-Module-Name: local.dbeaver.ui.test.support

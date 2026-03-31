@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>local.dbeaver.uitest</groupId>
+    <artifactId>dbeaver-ui-tests-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>DBeaver UI Tests</name>
+    <description>Private SWTBot UI test harness for DBeaver Firebird improvements</description>
+
+    <properties>
+        <tycho.version>5.0.2</tycho.version>
+        <java.version>21</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- DBeaver P2 repo: override with -Ddbeaver.p2.url=file:///... for local builds -->
+        <dbeaver.p2.url>file:///C:/temp/dbeaver/product/repositories/org.jkiss.dbeaver.ce.repository/target/repository</dbeaver.p2.url>
+        <eclipse.p2.url>https://download.eclipse.org/releases/2026-03/</eclipse.p2.url>
+        <swtbot.p2.url>https://download.eclipse.org/technology/swtbot/releases/latest/</swtbot.p2.url>
+
+        <!-- Firebird connection properties (passed as system properties to tests) -->
+        <firebird.host>localhost</firebird.host>
+        <firebird.port>3050</firebird.port>
+        <firebird.database>C:/temp/dbeaver/tmp/ui-test/firebird/UI_TEST_FB5.FDB</firebird.database>
+        <firebird.user>SYSDBA</firebird.user>
+        <firebird.password>masterkey</firebird.password>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>eclipse-p2</id>
+            <url>${eclipse.p2.url}</url>
+            <layout>p2</layout>
+        </repository>
+        <repository>
+            <id>eclipse-swtbot</id>
+            <url>${swtbot.p2.url}</url>
+            <layout>p2</layout>
+        </repository>
+        <repository>
+            <id>dbeaver-ce</id>
+            <url>${dbeaver.p2.url}</url>
+            <layout>p2</layout>
+        </repository>
+    </repositories>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.eclipse.tycho</groupId>
+                <artifactId>tycho-maven-plugin</artifactId>
+                <version>${tycho.version}</version>
+                <extensions>true</extensions>
+            </plugin>
+            <plugin>
+                <groupId>org.eclipse.tycho</groupId>
+                <artifactId>target-platform-configuration</artifactId>
+                <version>${tycho.version}</version>
+                <configuration>
+                    <pomDependencies>consider</pomDependencies>
+                    <environments>
+                        <environment>
+                            <os>win32</os>
+                            <ws>win32</ws>
+                            <arch>x86_64</arch>
+                        </environment>
+                    </environments>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.eclipse.tycho</groupId>
+                <artifactId>tycho-compiler-plugin</artifactId>
+                <version>${tycho.version}</version>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                </configuration>
+            </plugin>
+        </plugins>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.eclipse.tycho</groupId>
+                    <artifactId>tycho-surefire-plugin</artifactId>
+                    <version>${tycho.version}</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.eclipse.tycho</groupId>
+                    <artifactId>tycho-packaging-plugin</artifactId>
+                    <version>${tycho.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+
+    <modules>
+        <module>plugins/local.dbeaver.ui.test.support</module>
+        <module>plugins/local.dbeaver.firebird.ui.test</module>
+    </modules>
+</project>
