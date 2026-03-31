@@ -1,13 +1,19 @@
 # DBeaver UI Tests
 
-Private, local-only SWTBot UI test harness for DBeaver Firebird improvements.
+SWTBot UI test harness for DBeaver Firebird improvements.
 
 ## Prerequisites
+
+### Local execution
 
 - Java 21
 - Maven 3.9+
 - Firebird 5 server installed and running
 - Local DBeaver build (run `mvn clean verify -DskipTests` in the DBeaver repo)
+
+### CI (GitHub Actions)
+
+All prerequisites are handled automatically by the workflow. See [CI Workflow](#ci-workflow) below.
 
 ## Quick Start
 
@@ -20,10 +26,38 @@ cp ui-test.local.properties.example ui-test.local.properties
 powershell -ExecutionPolicy Bypass -File .\run-ui-tests.ps1
 ```
 
+## CI Workflow
+
+The **UI Tests** workflow (`.github/workflows/ui-tests.yml`) runs the full test suite on GitHub Actions against a DBeaver pre-release build from [`fdcastel/dbeaver`](https://github.com/fdcastel/dbeaver/releases).
+
+### Triggers
+
+| Trigger | Description |
+|---------|-------------|
+| `repository_dispatch` | Fired automatically by the `fdcastel/dbeaver` pre-release workflow after each successful build. |
+| `workflow_dispatch` | Manual trigger from the Actions tab. Accepts an optional `release_tag` input (e.g. `v17.0.0-pre.4`); auto-detects the latest prerelease if empty. |
+
+### What it does
+
+1. **Resolves the DBeaver release tag** — from dispatch payload, manual input, or latest prerelease auto-detection.
+2. **Downloads the P2 repository** — the `*-p2-repository.tar.gz` asset published by the DBeaver pre-release workflow.
+3. **Installs Firebird 5** — silent install of Firebird on the Windows runner.
+4. **Creates the test database** — using `isql.exe` and the fixture SQL scripts from `fixtures/sql/`.
+5. **Runs the UI tests** — `mvn clean verify` with Tycho/SWTBot against the DBeaver P2 repository (`timeout-minutes: 15`).
+6. **Uploads artifacts** — JUnit XML reports and screenshots as a build artifact.
+7. **Publishes a test report** — parsed JUnit results shown as a GitHub Check Run.
+
+### Manual trigger
+
+```bash
+gh workflow run ui-tests.yml -f release_tag=v17.0.0-pre.4
+```
+
 ## Project Structure
 
 - `plugins/local.dbeaver.ui.test.support/` — shared SWTBot helpers
 - `plugins/local.dbeaver.firebird.ui.test/` — Firebird UI test scenarios
 - `fixtures/sql/` — SQL scripts for test database setup
 - `scripts/` — utility scripts (DB reset, prerequisite checks)
+- `.github/workflows/ui-tests.yml` — CI workflow
 - `artifacts/` — test run output (screenshots, logs)
