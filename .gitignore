@@ -1,0 +1,24 @@
+# Build output
+target/
+bin/
+
+# Local config (machine-specific)
+ui-test.local.properties
+
+# IDE
+.project
+.classpath
+.settings/
+*.class
+
+# Artifacts from test runs
+artifacts/
+
+# Firebird database files
+*.FDB
+*.fdb
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
