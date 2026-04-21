@@ -17,6 +17,7 @@ import org.junit.runners.Suite.SuiteClasses;
     ScriptCommitRollbackTest.class,
     ExecuteBlockParameterBindingTest.class,
     ExecuteBlockNamedParamsTest.class,
+    ExecuteProcedureParameterBindingTest.class,
     NavigatorSmokeTest.class
 })
 public class AllFirebirdUITests {

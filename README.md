@@ -3,7 +3,7 @@
 SWTBot UI test harness for validating DBeaver pre-release builds.
 
 Currently covers:
-- **Firebird** — connection wizard, connection-settings round-trip, SET TERM script execution, EXECUTE BLOCK parameter binding (positional + named), navigator smoke tests.
+- **Firebird** — connection wizard, connection-settings round-trip, SET TERM script execution, EXECUTE BLOCK parameter binding (positional + named), EXECUTE PROCEDURE parameter binding (regression guard for [dbeaver/dbeaver#40644](https://github.com/dbeaver/dbeaver/pull/40644)), navigator smoke tests.
 - **PostgreSQL** — connection via API, regression guard for [dbeaver/dbeaver#40665](https://github.com/dbeaver/dbeaver/pull/40665) (script execution of COMMIT/ROLLBACK must not regress on databases that historically accepted them as raw SQL).
 
 ## Prerequisites
