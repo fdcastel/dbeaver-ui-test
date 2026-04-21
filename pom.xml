@@ -9,7 +9,7 @@
     <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>DBeaver UI Tests</name>
-    <description>Private SWTBot UI test harness for DBeaver Firebird improvements</description>
+    <description>Private SWTBot UI test harness for DBeaver pre-release validation (Firebird + PostgreSQL)</description>
 
     <properties>
         <tycho.version>5.0.2</tycho.version>
@@ -27,6 +27,13 @@
         <firebird.database>C:/temp/dbeaver/tmp/ui-test/firebird/UI_TEST_FB5.FDB</firebird.database>
         <firebird.user>SYSDBA</firebird.user>
         <firebird.password>masterkey</firebird.password>
+
+        <!-- PostgreSQL connection properties (passed as system properties to tests) -->
+        <postgres.host>localhost</postgres.host>
+        <postgres.port>5432</postgres.port>
+        <postgres.database>ui_test</postgres.database>
+        <postgres.user>postgres</postgres.user>
+        <postgres.password>postgres</postgres.password>
     </properties>
 
     <repositories>
@@ -99,5 +106,6 @@
     <modules>
         <module>plugins/local.dbeaver.ui.test.support</module>
         <module>plugins/local.dbeaver.firebird.ui.test</module>
+        <module>plugins/local.dbeaver.postgresql.ui.test</module>
     </modules>
 </project>

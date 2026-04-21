@@ -14,6 +14,7 @@ import org.junit.runners.Suite.SuiteClasses;
     FirebirdConnectionWizardTest.class,
     EditConnectionRoundTripTest.class,
     SQLEditorSetTermTest.class,
+    ScriptCommitRollbackTest.class,
     ExecuteBlockParameterBindingTest.class,
     ExecuteBlockNamedParamsTest.class,
     NavigatorSmokeTest.class

@@ -27,11 +27,13 @@ public class ConnectionUtil {
     // ── Programmatic connection creation (fast, for test setup) ──────────
 
     /**
-     * Creates a Firebird connection programmatically via the DBeaver API.
-     * This is the fast path — no wizard UI, no driver download dialogs.
-     * Returns the connection name.
+     * Generic: creates a DBeaver connection programmatically, no wizard UI.
+     * {@code driverSearchTerm} is a lowercase substring used to locate the driver
+     * by id (primary) or name (fallback) — e.g. "jaybird"/"firebird" or "postgres".
+     * {@code connectionDisplayName} becomes the datasource name shown in the navigator.
      */
-    public static String createFirebirdConnectionViaAPI(
+    public static String createConnectionViaAPI(
+            String driverSearchTerm, String connectionDisplayName,
             String host, String port, String database, String user, String password) {
 
         final String[] result = { null };
@@ -45,29 +47,12 @@ public class ConnectionUtil {
                 }
 
                 var registry = project.getDataSourceRegistry();
-
-                // Find the Firebird driver
-                var driverDescriptor = org.jkiss.dbeaver.registry.DataSourceProviderRegistry
-                        .getInstance().findDriver("jaybird");
+                var driverDescriptor = findDriver(driverSearchTerm);
                 if (driverDescriptor == null) {
-                    // Fallback: search by name
-                    for (var d : org.jkiss.dbeaver.registry.DataSourceProviderRegistry.getInstance()
-                            .getDataSourceProviders()) {
-                        for (var drv : d.getEnabledDrivers()) {
-                            if (drv.getName().toLowerCase().contains("firebird")) {
-                                driverDescriptor = drv;
-                                break;
-                            }
-                        }
-                        if (driverDescriptor != null) break;
-                    }
-                }
-                if (driverDescriptor == null) {
-                    System.err.println("ConnectionUtil: Firebird driver not found");
+                    System.err.println("ConnectionUtil: driver not found for term: " + driverSearchTerm);
                     return;
                 }
 
-                // Build connection configuration
                 var config = new org.jkiss.dbeaver.model.connection.DBPConnectionConfiguration();
                 config.setHostName(host);
                 config.setHostPort(port);
@@ -75,9 +60,8 @@ public class ConnectionUtil {
                 config.setUserName(user);
                 config.setUserPassword(password);
 
-                // Create the datasource
                 var dsContainer = registry.createDataSource(driverDescriptor, config);
-                dsContainer.setName("Firebird");
+                dsContainer.setName(connectionDisplayName);
                 dsContainer.setSavePassword(true);
                 registry.addDataSource(dsContainer);
                 registry.flushConfig();
@@ -93,11 +77,27 @@ public class ConnectionUtil {
         return result[0];
     }
 
+    /** Firebird-specific wrapper. */
+    public static String createFirebirdConnectionViaAPI(
+            String host, String port, String database, String user, String password) {
+        return createConnectionViaAPI("jaybird", "Firebird", host, port, database, user, password);
+    }
+
+    /** PostgreSQL-specific wrapper. */
+    public static String createPostgreSQLConnectionViaAPI(
+            String host, String port, String database, String user, String password) {
+        return createConnectionViaAPI("postgres", "PostgreSQL", host, port, database, user, password);
+    }
+
     /**
      * Updates an existing connection's settings via the DBeaver API.
+     * Matches the datasource whose name contains {@code connName} (or, as a
+     * fallback, whose driver name contains {@code driverSearchTerm}, lower-cased).
      */
     public static void updateConnectionViaAPI(
-            String connName, String host, String port, String database, String user, String password) {
+            String connName, String driverSearchTerm,
+            String host, String port, String database, String user, String password) {
+        final String term = driverSearchTerm == null ? "" : driverSearchTerm.toLowerCase();
         Display.getDefault().syncExec(() -> {
             try {
                 var project = org.jkiss.dbeaver.runtime.DBWorkbench.getPlatform()
@@ -106,7 +106,8 @@ public class ConnectionUtil {
 
                 var registry = project.getDataSourceRegistry();
                 for (var ds : registry.getDataSources()) {
-                    if (ds.getName().contains(connName) || ds.getDriver().getName().contains("Firebird")) {
+                    if (ds.getName().contains(connName)
+                            || (!term.isEmpty() && ds.getDriver().getName().toLowerCase().contains(term))) {
                         var config = ds.getConnectionConfiguration();
                         config.setHostName(host);
                         config.setHostPort(port);
@@ -122,6 +123,143 @@ public class ConnectionUtil {
                 e.printStackTrace(System.err);
             }
         });
+    }
+
+    /**
+     * Toggles auto-commit on the live JDBC connection via the DBeaver
+     * transaction manager. Use this to switch a connected datasource between
+     * auto- and manual-commit mode without reconnecting — subsequent SQL
+     * editor operations will run under the new mode.
+     */
+    public static void setAutoCommit(String connName, boolean autoCommit) {
+        Display.getDefault().syncExec(() -> {
+            try {
+                var ds = findContainer(connName);
+                if (ds == null || !ds.isConnected() || ds.getDataSource() == null) {
+                    System.err.println("ConnectionUtil.setAutoCommit: datasource not connected for " + connName);
+                    return;
+                }
+                var monitor = new org.jkiss.dbeaver.model.runtime.VoidProgressMonitor();
+                var ctx = ds.getDataSource().getDefaultInstance().getDefaultContext(monitor, false);
+                var tx = org.jkiss.dbeaver.model.DBUtils.getTransactionManager(ctx);
+                if (tx != null) {
+                    tx.setAutoCommit(monitor, autoCommit);
+                }
+            } catch (Exception e) {
+                e.printStackTrace(System.err);
+            }
+        });
+    }
+
+    /**
+     * Runs {@code sql} against an <b>isolated</b> execution context opened from
+     * the explicit target database (not the datasource's default instance —
+     * for multi-database drivers like PostgreSQL that's ambiguous). Returns
+     * the first column of the first row as a {@code long}, or {@code -1} on
+     * empty result / failure. An isolated context has its own transaction, so
+     * it only sees committed data.
+     *
+     * <p>{@code targetDbName} is looked up in the datasource's catalog/schema
+     * tree and matched case-insensitively against {@code getName()}.
+     */
+    public static long queryScalarLongIsolated(String connName, String targetDbName, String sql) {
+        final long[] result = { -1 };
+        final String[] diag = { null };
+        Display.getDefault().syncExec(() -> {
+            try {
+                var ds = findContainer(connName);
+                if (ds == null || !ds.isConnected() || ds.getDataSource() == null) {
+                    diag[0] = "datasource not connected";
+                    return;
+                }
+                var monitor = new org.jkiss.dbeaver.model.runtime.VoidProgressMonitor();
+
+                // Pick the correct DBSInstance — for PostgreSQL getDefaultInstance()
+                // returns the initial-database instance, but we want the one the
+                // SQL editor was executing against (ui_test, not postgres).
+                org.jkiss.dbeaver.model.struct.DBSInstance instance = findInstance(
+                        ds.getDataSource(), targetDbName, monitor);
+                if (instance == null) {
+                    diag[0] = "instance '" + targetDbName + "' not found; trying default";
+                    instance = ds.getDataSource().getDefaultInstance();
+                }
+
+                org.jkiss.dbeaver.model.exec.DBCExecutionContext isolated =
+                        instance.openIsolatedContext(monitor, "ui-test verify", null);
+                try {
+                    try (org.jkiss.dbeaver.model.exec.DBCSession session = isolated.openSession(
+                            monitor, org.jkiss.dbeaver.model.exec.DBCExecutionPurpose.USER, "verify")) {
+                        try (org.jkiss.dbeaver.model.exec.DBCStatement stmt = session.prepareStatement(
+                                org.jkiss.dbeaver.model.exec.DBCStatementType.QUERY, sql, false, false, false)) {
+                            stmt.executeStatement();
+                            try (org.jkiss.dbeaver.model.exec.DBCResultSet rs = stmt.openResultSet()) {
+                                if (rs.nextRow()) {
+                                    Object v = rs.getAttributeValue(0);
+                                    if (v instanceof Number n) result[0] = n.longValue();
+                                }
+                            }
+                        }
+                    }
+                } finally {
+                    try { isolated.close(); } catch (Exception ignore) { }
+                }
+            } catch (Exception e) {
+                diag[0] = "exception: " + e.getMessage();
+                e.printStackTrace(System.err);
+            }
+        });
+        if (diag[0] != null) {
+            System.err.println("ConnectionUtil.queryScalarLongIsolated: " + diag[0]);
+        }
+        return result[0];
+    }
+
+    private static org.jkiss.dbeaver.model.struct.DBSInstance findInstance(
+            org.jkiss.dbeaver.model.DBPDataSource dataSource,
+            String targetDbName,
+            org.jkiss.dbeaver.model.runtime.DBRProgressMonitor monitor) {
+        if (targetDbName == null || targetDbName.isEmpty()) return null;
+        if (!(dataSource instanceof org.jkiss.dbeaver.model.struct.DBSObjectContainer container)) {
+            return null;
+        }
+        try {
+            var children = container.getChildren(monitor);
+            if (children == null) return null;
+            for (var child : children) {
+                if (child instanceof org.jkiss.dbeaver.model.struct.DBSInstance inst
+                        && targetDbName.equalsIgnoreCase(child.getName())) {
+                    return inst;
+                }
+            }
+        } catch (Exception ignore) { }
+        return null;
+    }
+
+    private static org.jkiss.dbeaver.model.DBPDataSourceContainer findContainer(String connName) {
+        var project = org.jkiss.dbeaver.runtime.DBWorkbench.getPlatform().getWorkspace().getActiveProject();
+        if (project == null) return null;
+        for (var dsc : project.getDataSourceRegistry().getDataSources()) {
+            if (connName.equals(dsc.getName())) return dsc;
+        }
+        return null;
+    }
+
+    private static org.jkiss.dbeaver.model.connection.DBPDriver findDriver(String searchTerm) {
+        String term = searchTerm.toLowerCase();
+        var reg = org.jkiss.dbeaver.registry.DataSourceProviderRegistry.getInstance();
+
+        var byId = reg.findDriver(searchTerm);
+        if (byId != null) return byId;
+
+        for (var p : reg.getDataSourceProviders()) {
+            for (var drv : p.getEnabledDrivers()) {
+                if (drv.getId().toLowerCase().contains(term)
+                        || drv.getName().toLowerCase().contains(term)) {
+                    return drv;
+                }
+            }
+        }
+        return null;
     }
 
     // ── Wizard interaction (for tests that specifically test the wizard) ──

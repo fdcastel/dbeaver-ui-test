@@ -129,8 +129,37 @@ jobs:
           }
           Write-Host "Database setup complete."
 
+      - name: Start pre-installed PostgreSQL
+        shell: pwsh
+        run: |
+          $svc = Get-Service | Where-Object { $_.Name -like 'postgresql-x64-*' } | Select-Object -First 1
+          if (-not $svc) { throw 'No postgresql-x64-* service found on runner' }
+          Write-Host "Found service: $($svc.Name) (status: $($svc.Status))"
+
+          Set-Service -Name $svc.Name -StartupType Automatic
+          if ($svc.Status -ne 'Running') {
+            Start-Service -Name $svc.Name
+          }
+
+          $pgBin = (Get-ChildItem 'C:\Program Files\PostgreSQL\*\bin\psql.exe' | Select-Object -First 1).DirectoryName
+          if (-not $pgBin) { throw 'psql.exe not found under C:\Program Files\PostgreSQL' }
+          Write-Host "PostgreSQL bin: $pgBin"
+          "$pgBin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+          # The windows-latest PostgreSQL default superuser password is 'root'.
+          # Reset it to 'postgres' to match the test configuration.
+          $env:PGPASSWORD = 'root'
+          & "$pgBin\psql.exe" -U postgres -h 127.0.0.1 -c "ALTER USER postgres WITH PASSWORD 'postgres';"
+          if ($LASTEXITCODE -ne 0) { throw "Failed to reset postgres password (exit=$LASTEXITCODE)" }
+
+          $env:PGPASSWORD = 'postgres'
+          & "$pgBin\psql.exe" -U postgres -h 127.0.0.1 -c "DROP DATABASE IF EXISTS ui_test;"
+          & "$pgBin\psql.exe" -U postgres -h 127.0.0.1 -c "CREATE DATABASE ui_test;"
+          if ($LASTEXITCODE -ne 0) { throw "Failed to create ui_test database (exit=$LASTEXITCODE)" }
+          Write-Host "PostgreSQL is running, database 'ui_test' created."
+
       - name: Run UI tests
-        timeout-minutes: 15
+        timeout-minutes: 20
         shell: bash
         run: |
           P2_URL="file:///C:/dbeaver-p2-repo"
@@ -144,6 +173,11 @@ jobs:
             "-Dfirebird.database=${DB_PATH}" \
             -Dfirebird.user=SYSDBA \
             -Dfirebird.password=masterkey \
+            -Dpostgres.host=localhost \
+            -Dpostgres.port=5432 \
+            -Dpostgres.database=ui_test \
+            -Dpostgres.user=postgres \
+            -Dpostgres.password=postgres \
             -B --no-transfer-progress
 
       - name: Upload test artifacts
@@ -152,7 +186,7 @@ jobs:
         with:
           name: test-results-${{ steps.resolve-tag.outputs.tag }}
           path: |
-            plugins/local.dbeaver.firebird.ui.test/target/surefire-reports/TEST-*.xml
+            plugins/*/target/surefire-reports/TEST-*.xml
             artifacts/**
           retention-days: 30
 
@@ -160,6 +194,6 @@ jobs:
         if: always()
         uses: mikepenz/action-junit-report@v5
         with:
-          report_paths: 'plugins/local.dbeaver.firebird.ui.test/target/surefire-reports/TEST-*.xml'
-          check_name: 'Firebird UI Test Results'
+          report_paths: 'plugins/*/target/surefire-reports/TEST-*.xml'
+          check_name: 'DBeaver UI Test Results'
           include_passed: true

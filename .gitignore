@@ -1,6 +1,8 @@
 # Build output
 target/
 bin/
+.tycho-consumer-pom.xml
+UsersAdministratorAppDataRoaming/
 
 # Local config (machine-specific)
 ui-test.local.properties

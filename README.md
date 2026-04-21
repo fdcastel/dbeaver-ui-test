@@ -1,6 +1,10 @@
 # DBeaver UI Tests
 
-SWTBot UI test harness for DBeaver Firebird improvements.
+SWTBot UI test harness for validating DBeaver pre-release builds.
+
+Currently covers:
+- **Firebird** — connection wizard, connection-settings round-trip, SET TERM script execution, EXECUTE BLOCK parameter binding (positional + named), navigator smoke tests.
+- **PostgreSQL** — connection via API, regression guard for [dbeaver/dbeaver#40665](https://github.com/dbeaver/dbeaver/pull/40665) (script execution of COMMIT/ROLLBACK must not regress on databases that historically accepted them as raw SQL).
 
 ## Prerequisites
 
@@ -8,7 +12,7 @@ SWTBot UI test harness for DBeaver Firebird improvements.
 
 - Java 21
 - Maven 3.9+
-- Firebird 5 server installed and running
+- Firebird 5 server installed and running (local runs cover Firebird only; PostgreSQL tests run in CI)
 - Local DBeaver build (run `mvn clean verify -DskipTests` in the DBeaver repo)
 
 ### CI (GitHub Actions)
@@ -41,11 +45,12 @@ The **UI Tests** workflow (`.github/workflows/ui-tests.yml`) runs the full test 
 
 1. **Resolves the DBeaver release tag** — from dispatch payload, manual input, or latest prerelease auto-detection.
 2. **Downloads the P2 repository** — the `*-p2-repository.tar.gz` asset published by the DBeaver pre-release workflow.
-3. **Installs Firebird 5** — silent install of Firebird on the Windows runner.
-4. **Creates the test database** — using `isql.exe` and the fixture SQL scripts from `fixtures/sql/`.
-5. **Runs the UI tests** — `mvn clean verify` with Tycho/SWTBot against the DBeaver P2 repository (`timeout-minutes: 15`).
-6. **Uploads artifacts** — JUnit XML reports and screenshots as a build artifact.
-7. **Publishes a test report** — parsed JUnit results shown as a GitHub Check Run.
+3. **Installs Firebird 5** — silent install of Firebird on the Windows runner via the official Inno-Setup installer.
+4. **Creates the Firebird test database** — using `isql.exe` and the fixture SQL scripts from `fixtures/sql/`.
+5. **Starts pre-installed PostgreSQL** — uses the PostgreSQL service already present on `windows-latest`, resets the `postgres` password, creates the `ui_test` database.
+6. **Runs the UI tests** — `mvn clean verify` with Tycho/SWTBot against the DBeaver P2 repository; both Firebird and PostgreSQL test plugins are exercised.
+7. **Uploads artifacts** — JUnit XML reports (all plugins) and screenshots as a build artifact.
+8. **Publishes a test report** — parsed JUnit results shown as a GitHub Check Run.
 
 ### Manual trigger
 
@@ -57,7 +62,8 @@ gh workflow run ui-tests.yml -f release_tag=v17.0.0-pre.4
 
 - `plugins/local.dbeaver.ui.test.support/` — shared SWTBot helpers
 - `plugins/local.dbeaver.firebird.ui.test/` — Firebird UI test scenarios
-- `fixtures/sql/` — SQL scripts for test database setup
+- `plugins/local.dbeaver.postgresql.ui.test/` — PostgreSQL UI test scenarios
+- `fixtures/sql/` — SQL scripts for Firebird test database setup
 - `scripts/` — utility scripts (DB reset, prerequisite checks)
 - `.github/workflows/ui-tests.yml` — CI workflow
 - `artifacts/` — test run output (screenshots, logs)

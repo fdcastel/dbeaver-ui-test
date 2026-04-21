@@ -136,18 +136,54 @@ public class SQLEditorUtil {
 
     /**
      * Checks if an error dialog appeared. Returns the error message or null.
+     * Walks the SWT widget tree of each matching shell so we can read body text
+     * from Text/Label/CLabel/StyledText/Link widgets — DBeaver's ErrorDialog
+     * places the real message in a styled Text area, not in label(0).
      */
     public static String checkForErrorDialog(SWTWorkbenchBot bot) {
         for (SWTBotShell shell : bot.shells()) {
+            if (!shell.isOpen() || !shell.isVisible()) continue;
             String title = shell.getText().toLowerCase();
             if (title.contains("error") || title.contains("warning")) {
-                String text = title;
-                try { text = shell.bot().label(0).getText(); } catch (Exception e) { }
+                String body = readShellTextContent(shell);
                 shell.close();
-                return text;
+                return body == null || body.isEmpty() ? shell.getText() : body;
             }
         }
         return null;
+    }
+
+    /**
+     * Reads concatenated text content from all text-bearing widgets in the
+     * shell's tree. Safe to call on any dialog.
+     */
+    private static String readShellTextContent(SWTBotShell shell) {
+        StringBuilder sb = new StringBuilder();
+        org.eclipse.swt.widgets.Display.getDefault().syncExec(() -> {
+            try {
+                collectText((org.eclipse.swt.widgets.Widget) shell.widget, sb);
+            } catch (Exception ignore) { }
+        });
+        return sb.toString();
+    }
+
+    private static void collectText(org.eclipse.swt.widgets.Widget w, StringBuilder sb) {
+        if (w == null || w.isDisposed()) return;
+        String text = null;
+        if (w instanceof org.eclipse.swt.widgets.Label l) text = l.getText();
+        else if (w instanceof org.eclipse.swt.widgets.Text t) text = t.getText();
+        else if (w instanceof org.eclipse.swt.widgets.Link lk) text = lk.getText();
+        else if (w instanceof org.eclipse.swt.custom.CLabel cl) text = cl.getText();
+        else if (w instanceof org.eclipse.swt.custom.StyledText st) text = st.getText();
+        if (text != null && !text.isEmpty()) {
+            if (sb.length() > 0) sb.append(" | ");
+            sb.append(text);
+        }
+        if (w instanceof org.eclipse.swt.widgets.Composite c) {
+            for (org.eclipse.swt.widgets.Control child : c.getChildren()) {
+                collectText(child, sb);
+            }
+        }
     }
 
     /** Dismisses any error dialog that might have appeared. */
